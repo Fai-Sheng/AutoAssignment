@@ -9,6 +9,7 @@ import com.fai.autoassignment.core.Resolver;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.util.HashSet;
+import java.util.List;
 
 /**
  * Created by DaSheng on 2018/6/4.
@@ -35,6 +36,8 @@ import java.util.HashSet;
 //10. String 的数组如何处理 基本类型 的 数组 ；比较子元素的class是否相同，想同就直接赋值
 
 //11.类型不同 如何赋值 强制转换会不会有影响！！！int long  基本类型还是要拎出来淡出判断一下
+
+//12. 数组到数组  数组到List  List到数组 赋值
 
 public class FieldResolver implements Resolver {
 
@@ -186,7 +189,7 @@ public class FieldResolver implements Resolver {
      * @return
      */
     @RequiresApi(api = Build.VERSION_CODES.N)
-    private void resolveArray(Field goalField, Object srcArrayObj , Object goal) throws IllegalAccessException, InstantiationException, NoSuchFieldException {
+    private void resolveGoalArray(Field goalField, Object srcArrayObj , Object goal) throws IllegalAccessException, InstantiationException, NoSuchFieldException {
         if(null == goalField || null == srcArrayObj || null == goal){
             return;
         }
@@ -262,7 +265,7 @@ public class FieldResolver implements Resolver {
                 return f;
             }
         }
-        //在找没有Param的 普通字段
+        //再找 没有Param的 普通字段
         for(Field ff : fields) {
             ff.setAccessible(true);
             String fieldName = ff.getName();
@@ -285,9 +288,47 @@ public class FieldResolver implements Resolver {
         }
         Class goalCls = goalField.getType();
         if(goalCls.isArray()){
-            resolveArray(goalField,srcFieldObj,goal);
+            resolveGoalArray(goalField,srcFieldObj,goal);
         } else {
             goalField.set(goal,srcFieldObj);
         }
     }
+
+    /**
+     * 判断是不是 List 列表
+     * @param goalCls
+     * @return
+     */
+    private boolean isList(Class goalCls)
+    {
+        String simpleName = goalCls.getSimpleName();
+        return simpleName.equals("List") || simpleName.equals("ArrayList");
+    }
+
+    private void resolveGoalList(Field goalField, Object srcObj , Object goal)
+    {
+        if(goalField == null || srcObj == null || goal == null){
+            return;
+        }
+        Class goalCls = goalField.getType();
+        if(!isList(goalCls)){
+            return;
+        }
+
+        Class srcClass = srcObj.getClass();
+        if(srcClass.isArray()){
+            //srcObj是数组
+            Object[] srcObjs = (Object[]) srcObj;
+
+            return;
+        }
+
+        if(isList(srcClass)){
+            //srcObj是一个List
+            List<Object> srcList = (List<Object>) srcObj;
+
+            return;
+        }
+    }
+
 }
