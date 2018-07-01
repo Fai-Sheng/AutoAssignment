@@ -8,6 +8,9 @@ import com.fai.autoassignment.annotations.Param;
 import com.fai.autoassignment.core.Resolver;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 
@@ -144,7 +147,6 @@ public class FieldResolver implements Resolver {
         return true;
     }
 
-
     @RequiresApi(api = Build.VERSION_CODES.N)
     private boolean resolveParamAnnotationField(Field goalField , Object src, Object goal) throws NoSuchFieldException, IllegalAccessException, InstantiationException {
         //3.带Param的普通Field
@@ -184,37 +186,59 @@ public class FieldResolver implements Resolver {
     /**
      * 判断 是不是 数组
      * @param goalField
-     * @param srcArrayObj
+     * @param srcObj
      * @param goal
      * @return
      */
     @RequiresApi(api = Build.VERSION_CODES.N)
-    private void resolveGoalArray(Field goalField, Object srcArrayObj , Object goal) throws IllegalAccessException, InstantiationException, NoSuchFieldException {
-        if(null == goalField || null == srcArrayObj || null == goal){
+    private void resolveGoalArray(Field goalField, Object srcObj , Object goal) throws IllegalAccessException, InstantiationException, NoSuchFieldException {
+        if(null == goalField || null == srcObj || null == goal){
             return;
         }
-        if(!srcArrayObj.getClass().isArray() || !goalField.getType().isArray())  //判断是不是数组
+        if(!goalField.getType().isArray())  //判断 goalField是不是数组
         {
             return;
         }
-        Class srcComponentType = srcArrayObj.getClass().getComponentType();
         Class goalComponentType = goalField.getType().getComponentType();
 
-        if(srcComponentType.equals(goalComponentType)){
-            goalField.set(goal,srcArrayObj);
+        //TODO src 是数组
+        if(srcObj.getClass().isArray()){
+            Class srcComponentType = srcObj.getClass().getComponentType();
+            if(srcComponentType.equals(goalComponentType)){
+                goalField.set(goal,srcObj);
+                return;
+            }
+            Object[] arr = (Object[]) srcObj;
+            //通过goalField的信息去寻找src中的对应的值
+            int length = arr.length;
+            Object[] goalObjArray = (Object[]) Array.newInstance(goalComponentType,length);
+            for(int i = 0;i < length;i ++){
+                Object goalComponent = goalComponentType.newInstance();
+                resolve(arr[i],goalComponent);
+                goalObjArray[i] = goalComponent;
+            }
+            goalField.set(goal,goalObjArray);
             return;
         }
 
-        Object[] arr = (Object[]) srcArrayObj;
-        //通过goalField的信息去寻找src中的对应的值
-        int length = arr.length;
-        Object[] goalObjArray = (Object[]) Array.newInstance(goalComponentType,length);
-        for(int i = 0;i < length;i ++){
-            Object goalComponent = goalComponentType.newInstance();
-            resolve(arr[i],goalComponent);
-            goalObjArray[i] = goalComponent;
+        if(isList(srcObj.getClass())){
+            List<Object> srcList = (List<Object>) srcObj;
+            if(isListEmpty(srcList)){
+                return;
+            }
+            Object[] goalArray = new Object[srcList.size()];
+            Class srcListItemCls = srcList.get(0).getClass();
+            if(srcListItemCls.equals(goalComponentType)){
+                goalArray = srcList.toArray();
+            } else {
+                for(int i = 0;i < srcList.size();i ++){
+                    Object goalItem = goalComponentType.newInstance();
+                    resolve(srcList.get(i),goalItem);
+                    goalArray[i] = goalItem;
+                }
+            }
+            goalField.set(goal,goalArray);
         }
-        goalField.set(goal,goalObjArray);
     }
 
     @RequiresApi(api = Build.VERSION_CODES.N)
@@ -289,6 +313,8 @@ public class FieldResolver implements Resolver {
         Class goalCls = goalField.getType();
         if(goalCls.isArray()){
             resolveGoalArray(goalField,srcFieldObj,goal);
+        } else if(isList(goalCls)){
+            resolveGoalList(goalField,srcFieldObj,goal);
         } else {
             goalField.set(goal,srcFieldObj);
         }
@@ -296,17 +322,18 @@ public class FieldResolver implements Resolver {
 
     /**
      * 判断是不是 List 列表
-     * @param goalCls
+     * @param cls
      * @return
      */
-    private boolean isList(Class goalCls)
+    private boolean isList(Class cls)
     {
-        String simpleName = goalCls.getSimpleName();
+        String simpleName = cls.getSimpleName();
         return simpleName.equals("List") || simpleName.equals("ArrayList");
     }
 
-    private void resolveGoalList(Field goalField, Object srcObj , Object goal)
-    {
+
+    @RequiresApi(api = Build.VERSION_CODES.N)
+    private void resolveGoalList(Field goalField, Object srcObj , Object goal) throws IllegalAccessException, InstantiationException, NoSuchFieldException {
         if(goalField == null || srcObj == null || goal == null){
             return;
         }
@@ -314,21 +341,94 @@ public class FieldResolver implements Resolver {
         if(!isList(goalCls)){
             return;
         }
-
         Class srcClass = srcObj.getClass();
-        if(srcClass.isArray()){
-            //srcObj是数组
-            Object[] srcObjs = (Object[]) srcObj;
+        Class goalListGenericCls = getListGeneric(goalField);
+        if(goalListGenericCls == null){
+            return;
+        }
+        List<Object> goalList = new ArrayList<>();
 
+        if(srcClass.isArray()){
+            //TODO srcObj 是数组的情况
+            Object[] srcObjs = (Object[]) srcObj;
+            Class srcComponentCls = srcClass.getComponentType();
+            if(goalListGenericCls.equals(srcComponentCls)){
+                List<Object> list = arrayToList(srcObjs);
+                if(list != null) {
+                    goalList.addAll(list);
+                }
+            } else {
+                for(int i = 0;i < srcObjs.length; i++){
+                    Object goalItem = goalListGenericCls.newInstance();
+                    resolve(srcObjs[i],goalItem);
+                    goalList.add(goalItem);
+                }
+            }
+            goalField.set(goal,goalList);
             return;
         }
 
         if(isList(srcClass)){
-            //srcObj是一个List
+            //TODO srcObj 是List
             List<Object> srcList = (List<Object>) srcObj;
-
-            return;
+            if(!isListEmpty(srcList)) {
+                Class srcListGeneric = srcList.get(0).getClass();
+                if(srcListGeneric.equals(goalListGenericCls)){
+                    goalList.addAll(srcList);
+                } else {
+                    for(int i = 0;i < srcList.size();i ++){
+                        Object goalItem = goalListGenericCls.newInstance();
+                        resolve(srcList.get(i),goalItem);
+                        goalList.add(goalItem);
+                    }
+                }
+                goalField.set(goal,goalList);
+            }
         }
+    }
+
+
+    private List<Object> arrayToList(Object[] objs)
+    {
+        if(objs == null || objs.length <= 0){
+            return null;
+        }
+        List<Object> list = new ArrayList<>();
+        for(int i = 0;i < objs.length;i ++)
+        {
+            list.add(objs[i]);
+        }
+        return list;
+    }
+
+    private Object[] listToArray(List<Object> list)
+    {
+        if(list == null || list.size() <= 0){
+            return null;
+        }
+        return list.toArray();
+    }
+
+    private Class getListGeneric(Field field)
+    {
+        if(field == null){
+            return null;
+        }
+        Type type = field.getGenericType();
+        if(type instanceof ParameterizedType){
+            ParameterizedType pt = (ParameterizedType) type;
+            Class cls = (Class) pt.getActualTypeArguments()[0];
+            return cls;
+        }
+        return null;
+    }
+
+    private boolean isListEmpty(List list)
+    {
+        if(list == null || list.size() == 0){
+            return true;
+        }
+        return false;
     }
 
 }
