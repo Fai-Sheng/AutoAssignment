@@ -64,7 +64,7 @@ public class Utils {
             return true;
         }
 
-        return cls.isPrimitive();
+        return false;
     }
 
     public static boolean isString(Class cls){

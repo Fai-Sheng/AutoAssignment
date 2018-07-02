@@ -425,10 +425,9 @@ public class FieldResolver implements Resolver {
             int i = -1;
             try{
                 i = Integer.parseInt(str);
-            } catch (Exception e){
+            } catch (Exception ignored){
             }
             goalField.set(goal,i);
-            return;
         }
     }
 }
