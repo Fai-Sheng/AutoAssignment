@@ -19,17 +19,19 @@ import java.util.List;
 
 /**
  * Created by DaSheng on 2018/6/4.
+ *
+ * 1.任意的int long String转换
+ * 2.List和数组的任意赋值，支持不同的Item对象赋值
+ * 3.两个普通变量的赋值
+ * 4.层级相同之间的赋值，层级不同的赋值
+ * 5.不管层级多深都可以赋值 内部类必须是静态内部类
+ * 6.
  */
-
-//10. String 的数组如何处理 基本类型 的 数组 ；比较子元素的class是否相同，想同就直接赋值
-
-//11.类型不同 如何赋值 强制转换会不会有影响！！！int long  基本类型还是要拎出来淡出判断一下
 
 public class FieldResolver implements Resolver {
 
     private Object src;
     private Object goal;
-    private HashSet<Field> allFieldSet;
 
     @RequiresApi(api = Build.VERSION_CODES.N)
     @Override
@@ -177,7 +179,8 @@ public class FieldResolver implements Resolver {
         String goalFieldName = goalField.getName();
         Field srcField = null;
         try{
-            srcField = src.getClass().getField(goalFieldName);
+            srcField = src.getClass().getDeclaredField(goalFieldName);
+            srcField.setAccessible(true);
         } catch (Exception e){
         }
         if (srcField != null) {
@@ -209,40 +212,48 @@ public class FieldResolver implements Resolver {
         if (srcObj.getClass().isArray()) {
             Class srcComponentType = srcObj.getClass().getComponentType();
             if (srcComponentType.equals(goalComponentType)) {
-//                goalField.set(goal, srcObj);
-                set(goalField,srcObj,goal);
+                goalField.set(goal, srcObj);
                 return;
             }
             Object[] arr = (Object[]) srcObj;
             //通过goalField的信息去寻找src中的对应的值
             int length = arr.length;
-            Object[] goalObjArray = (Object[]) Array.newInstance(goalComponentType, length);
+            Object goalObjArray =  Array.newInstance(goalComponentType, length);
             for (int i = 0; i < length; i++) {
                 Object goalComponent = goalComponentType.newInstance();
                 resolve(arr[i], goalComponent);
-                goalObjArray[i] = goalComponent;
+                Array.set(goalObjArray,i,goalComponent);
             }
-            goalField.set(goal, goalObjArray);
+            try {
+                goalField.set(goal, goalObjArray);
+            }catch (Exception e){
+            }
             return;
         }
 
-        if (isList(srcObj.getClass())) {
+        if (isList(srcObj.getClass())) {           //srcObj是List 要转为Array 再赋值
             List<Object> srcList = (List<Object>) srcObj;
             if (Utils.isListEmpty(srcList)) {
                 return;
             }
-            Object[] goalArray = new Object[srcList.size()];
+            Object goalArray = Array.newInstance(goalComponentType,srcList.size());   //创建数组，必须使用Array，不然无法赋值
             Class srcListItemCls = srcList.get(0).getClass();
             if (srcListItemCls.equals(goalComponentType)) {
-                goalArray = srcList.toArray();
+                for(int i=0;i < srcList.size();i ++){
+                    Array.set(goalArray,i,srcList.get(i));
+                }
             } else {
                 for (int i = 0; i < srcList.size(); i++) {
                     Object goalItem = goalComponentType.newInstance();
                     resolve(srcList.get(i), goalItem);
-                    goalArray[i] = goalItem;
+                    Array.set(goalArray,i,goalItem);
                 }
             }
-            goalField.set(goal, goalArray);
+            try{
+                goalField.set(goal,goalArray);
+            }catch (Exception e){
+
+            }
         }
     }
 
@@ -293,14 +304,13 @@ public class FieldResolver implements Resolver {
             }
         }
         //再找 没有Param的 普通字段
-        for (Field ff : fields) {
-            ff.setAccessible(true);
-            String fieldName = ff.getName();
-            if (fieldName.equals(name)) {
-                return ff;
-            }
+        Field f = null;
+        try{
+            f = obj.getClass().getDeclaredField(name);
+            f.setAccessible(true);
+        } catch (Exception e){
         }
-        return null;
+        return f;
     }
 
     /**
@@ -315,12 +325,12 @@ public class FieldResolver implements Resolver {
             return;
         }
         Class goalCls = goalField.getType();
-        if (goalCls.isArray()) {
-            resolveGoalArray(goalField, srcFieldObj, goal);
-        } else if (isList(goalCls)) {
+        String name = goalCls.toString();
+        if (isList(goalCls)) {
             resolveGoalList(goalField, srcFieldObj, goal);
-        } else {
-//            goalField.set(goal, srcFieldObj);
+        } else if (goalCls.isArray()) {
+            resolveGoalArray(goalField, srcFieldObj, goal);
+        }  else {
             set(goalField,srcFieldObj,goal);
         }
     }
