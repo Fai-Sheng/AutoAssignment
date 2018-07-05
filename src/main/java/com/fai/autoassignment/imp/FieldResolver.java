@@ -20,12 +20,14 @@ import java.util.List;
 /**
  * Created by DaSheng on 2018/6/4.
  *
- * 1.任意的int long String转换
- * 2.List和数组的任意赋值，支持不同的Item对象赋值
- * 3.两个普通变量的赋值
+ * 1.两个普通变量的赋值 名字相同，名字不相同
+ * 2.任意的int long String转换
+ * 3.List和数组的任意赋值，支持不同的Item对象赋值
  * 4.层级相同之间的赋值，层级不同的赋值
  * 5.不管层级多深都可以赋值 内部类必须是静态内部类
- * 6.
+ * 6.Param , EntityParam两个注解
+ * 7.Param 的name fromEntity
+ * 8.EntityParam 的参数name 是 String数组，用来支持不同层级的赋值
  */
 
 public class FieldResolver implements Resolver {
@@ -224,10 +226,7 @@ public class FieldResolver implements Resolver {
                 resolve(arr[i], goalComponent);
                 Array.set(goalObjArray,i,goalComponent);
             }
-            try {
-                goalField.set(goal, goalObjArray);
-            }catch (Exception e){
-            }
+            setGoalFieldValue(goalField, goal, goalObjArray);
             return;
         }
 
@@ -249,11 +248,7 @@ public class FieldResolver implements Resolver {
                     Array.set(goalArray,i,goalItem);
                 }
             }
-            try{
-                goalField.set(goal,goalArray);
-            }catch (Exception e){
-
-            }
+            setGoalFieldValue(goalField,goalArray,goal);
         }
     }
 
@@ -325,7 +320,6 @@ public class FieldResolver implements Resolver {
             return;
         }
         Class goalCls = goalField.getType();
-        String name = goalCls.toString();
         if (isList(goalCls)) {
             resolveGoalList(goalField, srcFieldObj, goal);
         } else if (goalCls.isArray()) {
@@ -379,7 +373,7 @@ public class FieldResolver implements Resolver {
                     goalList.add(goalItem);
                 }
             }
-            goalField.set(goal, goalList);
+            setGoalFieldValue(goalField,goalList,goal);
             return;
         }
 
@@ -397,11 +391,12 @@ public class FieldResolver implements Resolver {
                         goalList.add(goalItem);
                     }
                 }
-                goalField.set(goal, goalList);
+                setGoalFieldValue(goalField,goalList,goal);
             }
         }
     }
 
+    // 不支持数组 List的赋值使用
     private void set(Field goalField,Object srcObj,Object goal) throws IllegalAccessException {
         if(null == goalField || null == srcObj || null == goal){
             return;
@@ -409,7 +404,7 @@ public class FieldResolver implements Resolver {
         Class srcCls = srcObj.getClass();
         Class goalCls = goalField.getType();
         if(srcCls.equals(goalCls)){
-            goalField.set(goal,srcObj);
+            setGoalFieldValue(goalField,srcObj,goal);
             return;
         }
         //判断goal是不是String
@@ -438,6 +433,15 @@ public class FieldResolver implements Resolver {
             } catch (Exception ignored){
             }
             goalField.set(goal,i);
+        }
+    }
+
+    public void setGoalFieldValue(Field goalField,Object srcFieldObj,Object goal)
+    {
+        try {
+            goalField.set(goal,srcFieldObj);
+        } catch (IllegalAccessException e) {
+            e.printStackTrace();
         }
     }
 }
