@@ -1,11 +1,13 @@
-package com.fai.autoassignment;
+package com.fai.autoassignment.util;
 
 import android.content.Intent;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -32,7 +34,7 @@ public class Utils {
         }
         if(cls.getSimpleName().equals("long")){
             return true;
-        } else if(cls.getSimpleName().equals("Long")){
+        } else if(cls.getName().equals(Long.class.getName())){
             return true;
         }
         return false;
@@ -45,10 +47,14 @@ public class Utils {
         }
         if(cls.getSimpleName().equals("int")){
             return true;
-        } else if(cls.getSimpleName().equals("Integer")){
+        } else if(cls.getName().equals(Integer.class.getName())){
             return true;
         }
         return false;
+    }
+
+    public static boolean isCharsequence(Class cls) {
+        return null != cls && cls.getName().equals(CharSequence.class.getName());
     }
 
     //判断是否是String，基本类型或者包装类，确定是否可以转换
@@ -101,9 +107,49 @@ public class Utils {
             return null;
         }
         List<Object> list = new ArrayList<>();
-        for (int i = 0; i < objs.length; i++) {
-            list.add(objs[i]);
-        }
+        Collections.addAll(list, objs);
         return list;
+    }
+
+
+    public static boolean isOriginObject(Class cls) {
+        if(null == cls){
+            return false;
+        }
+        if (cls.isPrimitive()) {
+            return true;
+        }
+        List<String> list = new ArrayList<>();
+        list.add(String.class.getName());
+        list.add(Integer.class.getName());
+        list.add(Byte.class.getName());
+        list.add(Long.class.getName());
+        list.add(Boolean.class.getName());
+        list.add(CharSequence.class.getName());
+        list.add(Character.class.getName());
+        list.add(Short.class.getName());
+        list.add(Float.class.getName());
+        list.add(Double.class.getName());
+
+        for(int i = 0;i < list.size();i ++){
+            String temp = list.get(i);
+            if(cls.getName().equals(temp)){
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+    public static Annotation getDeclaredAnnotation(Field field, Class annotationType)
+    {
+        Annotation[] as = field.getAnnotations();
+        for(int i = 0;i < as.length;i ++){
+            Class anType = as[i].annotationType();
+            if(anType.equals(annotationType)){
+                return as[i];
+            }
+        }
+        return null;
     }
 }

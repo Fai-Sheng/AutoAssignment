@@ -1,33 +1,24 @@
 package com.fai.autoassignment.imp;
 
-import android.os.Build;
-import android.support.annotation.RequiresApi;
 import android.text.TextUtils;
-
-import com.fai.autoassignment.Utils;
-import com.fai.autoassignment.annotations.EntityParam;
+import com.fai.autoassignment.util.Utils;
 import com.fai.autoassignment.annotations.Param;
 import com.fai.autoassignment.core.Resolver;
-
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 
 /**
  * Created by DaSheng on 2018/6/4.
  *
  * 1.两个普通变量的赋值 名字相同，名字不相同
- * 2.任意的int long String转换
+ * 2.任意的 int long String 转换
  * 3.List和数组的任意赋值，支持不同的Item对象赋值
  * 4.层级相同之间的赋值，层级不同的赋值
  * 5.不管层级多深都可以赋值 内部类必须是静态内部类
- * 6.Param , EntityParam两个注解
- * 7.Param 的name fromEntity
- * 8.EntityParam 的参数name 是 String数组，用来支持不同层级的赋值
+ * 6.Param 一个注解
+ * 7.Param 的 fromEntity 支持不同层级间的赋值
  */
 
 public class FieldResolver implements Resolver {
@@ -35,7 +26,6 @@ public class FieldResolver implements Resolver {
     private Object src;
     private Object goal;
 
-    @RequiresApi(api = Build.VERSION_CODES.N)
     @Override
     public <T, K> K execSetParam(T src, K goal) {
         this.src = src;
@@ -48,7 +38,7 @@ public class FieldResolver implements Resolver {
         return goal;
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.N)
+
     private void resolve(Object src, Object goal) throws NoSuchFieldException, InstantiationException, IllegalAccessException {
         if (null == src) {
             return;
@@ -64,13 +54,8 @@ public class FieldResolver implements Resolver {
         }
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.N)
     private void resolveField(Field goalField, Object goal, Object src) throws NoSuchFieldException, IllegalAccessException, InstantiationException {
         if (null == goalField) {
-            return;
-        }
-
-        if (resolveObjField(goalField, src, goal)) {
             return;
         }
 
@@ -85,29 +70,7 @@ public class FieldResolver implements Resolver {
         resolveNormalField(goalField, src, goal);
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.N)
-    private boolean resolveObjField(Field goalField, Object src, Object goal) throws IllegalAccessException, InstantiationException, NoSuchFieldException {
-        Class goalFieldClass = goalField.getType();
-        EntityParam goalEntityParam = (EntityParam) goalFieldClass.getDeclaredAnnotation(EntityParam.class);
-        //1.对象Field
-        if (null != goalEntityParam) {
-            String goalEntityParamName = goalEntityParam.name();
-            if (TextUtils.isEmpty(goalEntityParamName)) {
-                goalEntityParamName = goalField.getName(); //如果是空值，默认就是name
-            }
-            Field srcFieldWithParam = findFieldWithEntityAnnotation(src, goalEntityParamName);
-            if (srcFieldWithParam != null) {
-                Object goalFieldObj = goalFieldClass.newInstance();
-                goalField.set(goal, goalFieldObj);
-                resolve(srcFieldWithParam.get(src), goalField.get(goal));
-            }
-            return true;
-        }
-        return false;
-    }
 
-
-    @RequiresApi(api = Build.VERSION_CODES.N)
     private boolean resolveParamAnnotationWithExtraValue(Field goalField, Object src, Object goal) throws NoSuchFieldException, IllegalAccessException, InstantiationException {
         //2.带Param注解 并且fromEntity有值 的注解的Field
 
@@ -115,7 +78,7 @@ public class FieldResolver implements Resolver {
             return false;
         }
 
-        Param param = goalField.getDeclaredAnnotation(Param.class);
+        Param param = (Param) Utils.getDeclaredAnnotation(goalField,Param.class);
         if (null == param) {
             return false;
         }
@@ -141,19 +104,19 @@ public class FieldResolver implements Resolver {
         return true;
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.N)
+
     private boolean resolveParamAnnotationField(Field goalField, Object src, Object goal) throws NoSuchFieldException, IllegalAccessException, InstantiationException {
         //3.带Param的普通Field
-        if (null != goalField.getDeclaredAnnotation(Param.class)) {
+        if (null != Utils.getDeclaredAnnotation(goalField,Param.class)) {
             //这个Field带有 Param
-            Param goalParam = goalField.getDeclaredAnnotation(Param.class);
+            Param goalParam = (Param) Utils.getDeclaredAnnotation(goalField,Param.class);
             String goalParamName = goalParam.name();
 
             if (TextUtils.isEmpty(goalParamName)) {
                 goalParamName = goalField.getName();
             }
 
-            Field srcField = findFieldWithFieldAnnotation(src, goalParamName);
+            Field srcField = findFieldWithAnnotation(src, goalParamName);
             if (null != srcField) {
                 Object srcDestObj = srcField.get(src);
                 diffResolveArrayOrElse(goalField, srcDestObj, goal);
@@ -175,7 +138,6 @@ public class FieldResolver implements Resolver {
         return false;
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.N)
     private void resolveNormalField(Field goalField, Object src, Object goal) throws IllegalAccessException, InstantiationException, NoSuchFieldException {
         //4.不带注解的普通字段
         String goalFieldName = goalField.getName();
@@ -199,7 +161,6 @@ public class FieldResolver implements Resolver {
      * @param goal
      * @return
      */
-    @RequiresApi(api = Build.VERSION_CODES.N)
     private void resolveGoalArray(Field goalField, Object srcObj, Object goal) throws IllegalAccessException, InstantiationException, NoSuchFieldException {
         if (null == goalField || null == srcObj || null == goal) {
             return;
@@ -252,41 +213,7 @@ public class FieldResolver implements Resolver {
         }
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.N)
-    private Field findFieldWithEntityAnnotation(Object obj, String name) {
-        if (null == obj || TextUtils.isEmpty(name)) {
-            return null;
-        }
-        Field[] fs = obj.getClass().getDeclaredFields();
-        //先判断带有相同name的 EntityParam
-        for (Field f : fs) {
-            f.setAccessible(true);
-            Class fieldClass = f.getType();
-            EntityParam entityParam = (EntityParam) fieldClass.getDeclaredAnnotation(EntityParam.class);
-            if (null != entityParam) {
-                String entityParamName = entityParam.name();
-                if (TextUtils.isEmpty(entityParamName)) {
-                    entityParamName = fieldClass.getSimpleName();
-                }
-                if (entityParamName.equals(name)) {
-                    return f;
-                }
-            }
-        }
-        //再去寻找不带EntityParam，但是类名和EntityParam的name相同的
-        for (Field ff : fs) {
-            ff.setAccessible(true);
-            Class fieldCls = ff.getType();
-            String clsName = fieldCls.getSimpleName();
-            if (clsName.equals(name)) {
-                return ff;
-            }
-        }
-        return null;
-    }
-
-    @RequiresApi(api = Build.VERSION_CODES.N)
-    private Field findFieldWithFieldAnnotation(Object obj, String name) {
+    private Field findFieldWithAnnotation(Object obj, String name) {
         if (null == obj || TextUtils.isEmpty(name)) {
             return null;
         }
@@ -294,7 +221,8 @@ public class FieldResolver implements Resolver {
         //先找 带Param的字段
         for (Field f : fields) {
             f.setAccessible(true);
-            if (null != f.getDeclaredAnnotation(Param.class) && f.getDeclaredAnnotation(Param.class).name().equals(name)) {
+            Param param = (Param) Utils.getDeclaredAnnotation(f,Param.class);
+            if (null != param && param.name().equals(name)) {
                 return f;
             }
         }
@@ -314,7 +242,7 @@ public class FieldResolver implements Resolver {
      * @param goalField
      * @param srcFieldObj
      */
-    @RequiresApi(api = Build.VERSION_CODES.N)
+
     private void diffResolveArrayOrElse(Field goalField, Object srcFieldObj, Object goal) throws IllegalAccessException, NoSuchFieldException, InstantiationException {
         if (null == goalField || null == srcFieldObj) {
             return;
@@ -322,11 +250,17 @@ public class FieldResolver implements Resolver {
         Class goalCls = goalField.getType();
         if (isList(goalCls)) {
             resolveGoalList(goalField, srcFieldObj, goal);
-        } else if (goalCls.isArray()) {
-            resolveGoalArray(goalField, srcFieldObj, goal);
-        }  else {
-            set(goalField,srcFieldObj,goal);
+            return;
         }
+        if (goalCls.isArray()) {
+            resolveGoalArray(goalField, srcFieldObj, goal);
+            return;
+        }
+        if(!Utils.isOriginObject(goalCls)){  //自定义对象
+            resolveInsideModel(goalField,srcFieldObj,goal);
+            return;
+        }
+        setValue(goalField,srcFieldObj,goal);
     }
 
     /**
@@ -341,7 +275,6 @@ public class FieldResolver implements Resolver {
     }
 
 
-    @RequiresApi(api = Build.VERSION_CODES.N)
     private void resolveGoalList(Field goalField, Object srcObj, Object goal) throws IllegalAccessException, InstantiationException, NoSuchFieldException {
         if (goalField == null || srcObj == null || goal == null) {
             return;
@@ -396,8 +329,24 @@ public class FieldResolver implements Resolver {
         }
     }
 
-    // 不支持数组 List的赋值使用
-    private void set(Field goalField,Object srcObj,Object goal) throws IllegalAccessException {
+    //自定义的 Model
+    private void resolveInsideModel(Field goalField,Object srcObj,Object goal) throws IllegalAccessException, InstantiationException, NoSuchFieldException {
+        if(null == goalField || null == srcObj || null == goal){
+            return;
+        }
+        Class goalFieldCls = goalField.getType();
+        Class srcObjCls = srcObj.getClass();
+        if(goalFieldCls.equals(srcObjCls)){
+            setGoalFieldValue(goalField,srcObj,goal);
+            return;
+        }
+        Object objGoal = goalFieldCls.newInstance();
+        resolve(srcObj,objGoal);
+        setGoalFieldValue(goalField,objGoal,goal);
+    }
+
+    //当为 普通赋值 的情况下 使用
+    private void setValue(Field goalField, Object srcObj, Object goal) throws IllegalAccessException {
         if(null == goalField || null == srcObj || null == goal){
             return;
         }
@@ -436,8 +385,7 @@ public class FieldResolver implements Resolver {
         }
     }
 
-    public void setGoalFieldValue(Field goalField,Object srcFieldObj,Object goal)
-    {
+    private void setGoalFieldValue(Field goalField,Object srcFieldObj,Object goal) {
         try {
             goalField.set(goal,srcFieldObj);
         } catch (IllegalAccessException e) {
